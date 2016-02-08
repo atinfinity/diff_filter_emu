@@ -96,7 +96,7 @@ int soft_filter(cv::Mat &src_img, cv::Mat &dst_img, int iteration, double decay_
 
 void usage(void)
 {
-    std::cout << "usage: diff_filter_emu -i input_image [-o output_image] [-n iteration] [-d decay_factor] [-f decay_offset] [-g gamma] [-s]" << std::endl;
+    std::cout << "usage: diff_filter_emu -i=input_image [-o=output_image] [-n=iteration] [-d=decay_factor] [-f=decay_offset] [-g=gamma] [-s]" << std::endl;
 }
 
 int main(int argc, char* argv[])
