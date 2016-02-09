@@ -6,14 +6,15 @@ Add pseudo diffusion filter effect to given photo image.
 
 diff_filter_emu is command line tool that generates image with pseudo diffusion filter effect, this effect is realized with cascading (adding) gradual gaussian filtered layers of original image.
 This program is especially good for starry night photography enhancement, however, can be used for other kinds of photography.
+Working with large image size (such as more than FullHD size) is recommended.
 
 Before
 
-![Demo](https://raw.githubusercontent.com/delphinus1024/diff_filter_emu/master/before.png)
+<img src="https://raw.githubusercontent.com/delphinus1024/diff_filter_emu/master/before.png" style="width: 600px;"/>
 
-After
+After (w/ default parameters)
 
-![Demo](https://raw.githubusercontent.com/delphinus1024/diff_filter_emu/master/after.png)
+<img src="https://raw.githubusercontent.com/delphinus1024/diff_filter_emu/master/after.png" style="width: 600px;"/>
 
 ## Features
 
@@ -34,9 +35,9 @@ After
 - -i=input_image:    Original image file.
 - -o=output_image:   Output image file. (default: result.tif)
 - -n=iteration:      Number of gradual gaussian filtered layers. (default: 5)
-- -d=decay_factor:   Gain decay of layers. the more values, the more decay. (default: 2.0)
+- -d=decay_factor:   Gain decay of layers. the more values, the more decay. (default: 5.0)
 - -f=decay_offset:   Adjust decay of the first layer. If set to 0, gain of the first layer is set to 1 (means full opacity). (default: 0.1)
-- -g=gamma:          Gamma correction factor. correction is done before processing and reverse gamma corrention is done after processing.  Larger gamma value gives larger effect to bright area. (default: 1.8)
+- -g=gamma:          Gamma correction factor. correction is done before processing and reverse gamma corrention is done after processing.  Larger gamma value gives larger effect to bright area. (default: 1.3)
 - -s:              Add this option when show the original and processed image when finished.
 	
 ## Installation

@@ -107,9 +107,9 @@ int main(int argc, char* argv[])
         "{i||}"
         "{o|result.tif|}"
         "{n|5|}"
-        "{d|2.0|}"
+        "{d|5.0|}"
         "{f|0.1|}"
-        "{g|1.8|}"
+        "{g|1.3|}"
         ;
 
     cv::CommandLineParser parser(argc, argv, keys);
