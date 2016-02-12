@@ -13,12 +13,66 @@
 float calc_gamma(float val, double gm)
 {
     CV_Assert(val >= 0.);
-
     if (val > 1.0)
+    {
         val = 1.0;
-
+    }
     return((float)pow(val, gm));
 }
+
+class ApplyGamma_Invoker : public cv::ParallelLoopBody
+{
+private:
+    cv::Mat _src;
+    cv::Mat _dst;
+    double _gamma;
+public:
+    ApplyGamma_Invoker(const cv::Mat& src, cv::Mat& dst, double gamma)
+        : _src(src), _dst(dst), _gamma(gamma) { }
+    void operator() (const cv::Range& range) const
+    {
+        int row0 = range.start;
+        int row1 = range.end;
+        cv::Mat srcStripe = _src.rowRange(row0, row1);
+        cv::Mat dstStripe = _dst.rowRange(row0, row1);
+        for (int y = 0; y < srcStripe.rows; y++)
+        {
+            for (int x = 0; x < srcStripe.cols; x++)
+            {
+                dstStripe.at<cv::Vec3f>(y, x)[0] = calc_gamma(srcStripe.at<cv::Vec3f>(y, x)[0], _gamma);
+                dstStripe.at<cv::Vec3f>(y, x)[1] = calc_gamma(srcStripe.at<cv::Vec3f>(y, x)[1], _gamma);
+                dstStripe.at<cv::Vec3f>(y, x)[2] = calc_gamma(srcStripe.at<cv::Vec3f>(y, x)[2], _gamma);
+            }
+        }
+    }
+};
+
+class ApplyGain_Invoker : public cv::ParallelLoopBody
+{
+private:
+    cv::Mat _src;
+    cv::Mat _dst;
+    double _gain;
+public:
+    ApplyGain_Invoker(const cv::Mat& src, cv::Mat& dst, double gain)
+        : _src(src), _dst(dst), _gain(gain) { }
+    void operator() (const cv::Range& range) const
+    {
+        int row0 = range.start;
+        int row1 = range.end;
+        cv::Mat srcStripe = _src.rowRange(row0, row1);
+        cv::Mat dstStripe = _dst.rowRange(row0, row1);
+        for (int y = 0; y < srcStripe.rows; y++)
+        {
+            for (int x = 0; x < srcStripe.cols; x++)
+            {
+                dstStripe.at<cv::Vec3f>(y, x)[0] += (srcStripe.at<cv::Vec3f>(y, x)[0] * _gain);
+                dstStripe.at<cv::Vec3f>(y, x)[1] += (srcStripe.at<cv::Vec3f>(y, x)[1] * _gain);
+                dstStripe.at<cv::Vec3f>(y, x)[2] += (srcStripe.at<cv::Vec3f>(y, x)[2] * _gain);
+            }
+        }
+    }
+};
 
 int soft_filter(cv::Mat &src_img, cv::Mat &dst_img, int iteration, double decay_factor, double decay_offset, double gamma)
 {
@@ -28,24 +82,17 @@ int soft_filter(cv::Mat &src_img, cv::Mat &dst_img, int iteration, double decay_
     src_img.convertTo(fsrc_img, CV_32FC3, 1.0 / 255.);
 
     cv::Mat fsrc_img_gamma = cv::Mat::zeros(fsrc_img.size(), fsrc_img.type());
-    {
-        cv::MatIterator_<cv::Vec3f> it = fsrc_img.begin<cv::Vec3f>(), it_end = fsrc_img.end<cv::Vec3f>();
-        cv::MatIterator_<cv::Vec3f> itg = fsrc_img_gamma.begin<cv::Vec3f>();
-        for (; it != it_end; ++it, ++itg) {
-            cv::Vec3f pix = *it, pix_gm;
-
-            pix_gm[0] = calc_gamma(pix[0], gamma);
-            pix_gm[1] = calc_gamma(pix[1], gamma);
-            pix_gm[2] = calc_gamma(pix[2], gamma);
-
-            *itg = pix_gm;
-        }
+    cv::parallel_for_
+    (
+        cv::Range(0, fsrc_img_gamma.rows),
+        ApplyGamma_Invoker(fsrc_img, fsrc_img_gamma, gamma)
+    );
 #ifdef GAMMA_IMAGE_OUTPUT
-        cv::Mat tmp;
-        fsrc_img_gamma.convertTo(tmp, CV_8UC3, 255.);
-        cv::imwrite("gamma.tif", tmp);
+    cv::Mat tmp;
+    fsrc_img_gamma.convertTo(tmp, CV_8UC3, 255.);
+    cv::imwrite("gamma.tif", tmp);
 #endif
-    }
+
     cv::Mat fdst_img = fsrc_img_gamma.clone();
 
     unsigned int sigma = 2;
@@ -60,34 +107,21 @@ int soft_filter(cv::Mat &src_img, cv::Mat &dst_img, int iteration, double decay_
         std::cout << "Gain=" << gain << std::endl;
 
         cv::Mat fpyrsrc = fsrc_img_gamma.clone(), fpyrdst;
-        cv::GaussianBlur(fpyrsrc, fpyrdst, cv::Size(0, 0), sigma);
-
-        cv::MatIterator_<cv::Vec3f> itdst = fdst_img.begin<cv::Vec3f>(), itdst_end = fdst_img.end<cv::Vec3f>();
-        cv::MatIterator_<cv::Vec3f> itpyr = fpyrdst.begin<cv::Vec3f>();
-        for (; itdst != itdst_end; ++itdst, ++itpyr) {
-            cv::Vec3f pix_dst = *itdst;
-            cv::Vec3f pix_pyr = *itpyr;
-
-            pix_dst += (pix_pyr * gain);
-            *itdst = pix_dst;
-        }
+        cv::GaussianBlur(fpyrsrc, fpyrdst, cv::Size(7, 7), sigma, sigma, cv::BORDER_CONSTANT);
+        cv::parallel_for_
+        (
+            cv::Range(0, fdst_img.rows),
+            ApplyGain_Invoker(fpyrdst, fdst_img, gain)
+        );
     }
 
     cv::Mat fdst_img_ungamma = cv::Mat::zeros(fdst_img.size(), fdst_img.type());
-    {
-        double gm = 1.0 / gamma;
-        cv::MatIterator_<cv::Vec3f> it = fdst_img.begin<cv::Vec3f>(), it_end = fdst_img.end<cv::Vec3f>();
-        cv::MatIterator_<cv::Vec3f> itg = fdst_img_ungamma.begin<cv::Vec3f>();
-        for (; it != it_end; ++it, ++itg) {
-            cv::Vec3f pix = *it, pix_gm;
-
-            pix_gm[0] = calc_gamma(pix[0], gm);
-            pix_gm[1] = calc_gamma(pix[1], gm);
-            pix_gm[2] = calc_gamma(pix[2], gm);
-
-            *itg = pix_gm;
-        }
-    }
+    double gm = 1.0 / gamma;
+    cv::parallel_for_
+    (
+        cv::Range(0, fdst_img_ungamma.rows),
+        ApplyGamma_Invoker(fdst_img, fdst_img_ungamma, gm)
+    );
 
     fdst_img_ungamma.convertTo(dst_img, CV_8UC3, 255.);
 
@@ -144,7 +178,13 @@ int main(int argc, char* argv[])
     }
 
     cv::Mat dst_img;
+
+    double f = 1000.0f / cv::getTickFrequency();
+    int64 start = cv::getTickCount();
     soft_filter(src_img, dst_img, iteration, decay_factor, decay_offset, gamma);
+    int64 end = cv::getTickCount();
+    std::cout << (end - start) * f << "[ms]" << std::endl;
+
     cv::imwrite(output_img, dst_img);
 
     if(show_result)
